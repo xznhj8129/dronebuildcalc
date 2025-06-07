@@ -154,9 +154,11 @@ class MotorData:
         max_distance = 0
         max_flight_time = 0
         batt_cap_Am = batt_cap * 60
+        radius = 0
+        max_flight_time = 0
 
         # Iterate over possible outbound flight times (in minutes)
-        for t_out in np.arange(1, flight_time, 0.1):
+        for t_out in np.arange(0.1, flight_time, 0.1):
             # Energy consumed during outbound flight, loiter, and return flight
             E_out = current_draws['Flight'] * t_out
             E_loiter = current_draws['Hover'] * loiter_time_min
@@ -168,19 +170,21 @@ class MotorData:
                 max_flight_time = t_out
                 radius = flight_speed_kmh * (t_out / 60)  # Convert time to hours for distance
             else:
-                break  # Exceeded battery capacity, stop iteration
+                break
         max_distance = flight_speed_kmh * (flight_time/60.0)
 
-        #print("Performance:")
-        #print("Total weight:",total_weight)
-        #print(f"Hover:\t\t {round(throttle_hover)}% throt\t {current_draws['Hover']:.2f} A\t {hover_time:.2f} min")
-        #print(f"TW {round(thrust_weight_ratio)}:1 ratio:\t {round(throttle_tw)}% throt\t {current_draws['TW']:.2f} A\t {tw_time:.2f} min")
-        #print(f"Flight 30deg:\t {round(throttle_flight)}% throt\t {current_draws['Flight']:.2f} A\t {flight_time:.2f} min")
-        #print(f"Max distance at {flight_speed_kmh}km/h: {max_distance:.2f} km")
-        #print(f'For {loiter_time_min:.2f} min loiter time:')
-        #print(f'Max Outbound time: {max_flight_time:.2f} min')
-        #print(f'Max flight radius: {radius:.2f} km')
+        print("Performance:")
+        print("Total weight:",total_weight)
+        print(f"Hover:\t\t {round(throttle_hover)}% throt\t {current_draws['Hover']:.2f} A\t {hover_time:.2f} min")
+        print(f"TW {round(thrust_weight_ratio)}:1 ratio:\t {round(throttle_tw)}% throt\t {current_draws['TW']:.2f} A\t {tw_time:.2f} min")
+        print(f"Flight 30deg:\t {round(throttle_flight)}% throt\t {current_draws['Flight']:.2f} A\t {flight_time:.2f} min")
+        print(f"Max distance at {flight_speed_kmh}km/h: {max_distance:.2f} km")
+        print(f'For {loiter_time_min:.2f} min loiter time:')
+        print(f'Max Outbound time: {max_flight_time:.2f} min')
+        print(f'Max flight radius: {radius:.2f} km')
+        print()
         return{
+            'error': None,
             'frame_weight': weight,
             "total_weight": total_weight,
             'throt_h':throttle_hover,
@@ -204,8 +208,9 @@ class MotorData:
 
 
 #brand, motor, prop = ('Brotherhobby', 'F2004', 'F6030X2')
+brand, motor, prop, kv, battS = ('Uangel', 'A2807', 'GF7035', 1300, 6)
 #brand, motor, prop, kv, battS = ('Brotherhobby', 'F2008', 'F8330X2', 1400, 4)
-brand, motor, prop, kv, battS = ('Brotherhobby', 'F2008', 'F9453X2', 1000, 4)
+#brand, motor, prop, kv, battS = ('Brotherhobby', 'F2008', 'F9453X2', 1000, 4)
 #brand, motor, prop, kv, battS = ('Brotherhobby', 'F2008', 'F9453X2', 1000, 3)
 #brand, motor, prop, kv, battS = ('Brotherhobby', 'F1503', 'F4726X2', 3850, 2)
 #brand, motor, prop, kv, battS = ('Brotherhobby', 'F2206', 'F6030X2', 1370, 4)
@@ -214,13 +219,12 @@ brand, motor, prop, kv, battS = ('Brotherhobby', 'F2008', 'F9453X2', 1000, 4)
 
 motor_model = MotorData(brand, motor, prop, kv, battS)
 
-max_esc_current = float(60)  # Maximum ESC current in Amps
-thrust_weight_ratio = float(2.5)  # Necessary thrust-to-weight ratio
+
 batt_format = 21700
 batt_s = motor_model.motor_batt_s   # Number of series cells
 batt_p = 1   # Number of parallel cells
 cell_w = float(70)  # Weight per cell in grams (21700: 70, 18650: 45)
-cell_c = 100         # C-rating of the cells
+cell_c = 10         # C-rating of the cells
 cell_cap = float(5) # Capacity per cell in Amp-hours
 
 cell_n = batt_s * batt_p
@@ -229,6 +233,9 @@ max_battery_current = cell_c * cell_cap * batt_p  # Maximum battery current in A
 max_battery_voltage = 4.2 * batt_s
 avg_battery_voltage = 3.8 * batt_s
 battery_weight = cell_w * cell_n
+
+max_esc_current = float(60)  # Maximum ESC current in Amps
+thrust_weight_ratio = float(2.5)  # Necessary thrust-to-weight ratio
 number_of_motors = 4 # Assume number of motors (default to quadcopter)
 total_motors_weight = motor_model.motor_weight * number_of_motors
 
@@ -238,8 +245,8 @@ flight_speed = flight_speed_kmh * (1000/3600)  # Convert km/h to m/s
 
 # Safety margin and loiter time
 safety_margin = 0.1  # 10% safety margin
-loiter_time_min = 10  # Loaded hover time in minutes
-takeoff_weight = 1000.0 # 1P
+loiter_time_min = 1  # Loaded hover time in minutes
+takeoff_weight = 1400.0 # 1P
 drone_weight = takeoff_weight - battery_weight
 frame_weight = drone_weight - total_motors_weight
 required_thrust = (thrust_weight_ratio * takeoff_weight)
@@ -274,23 +281,26 @@ print(f"Max throttle time: {p['time_m']:.2f} minutes")
 print()
 
 p2 = motor_model.drone_weight_perf(frame_weight, total_motors_weight, battery_weight*2, battery_capacity*2)
-takeoff_weight = drone_weight + (battery_weight*2)
-required_thrust = (thrust_weight_ratio * takeoff_weight)
-print('\n#########')
-print(f"Battery: {batt_format} {batt_s}S2P {battery_capacity*2000} mAh {max_battery_current*2}A {battery_weight*2}g")
-print("#########")
-print(f"2P Takeoff weight: {takeoff_weight}g")
-print(f"Required thrust for {thrust_weight_ratio:.1f}:1 thrust/weight ratio at {takeoff_weight}g TOW: {required_thrust:.2f}g")
-print(f"Actual Thrust/Weight ratio: {max_total_thrust/takeoff_weight:.2f}:1")
-if max_total_thrust < required_thrust:
-    print(f"\nERROR: Insufficient thrust for thrust/weight ratio")
-    exit(0)
-print(f"Amp draw hover: {p2['ah']:.2f} A")
-print(f"Amp draw flight: {p2['af']:.2f} A")
-print(f"Hover time: {p2['time_h']:.2f} minutes")
-print(f"Flight time: {p2['time_f']:.2f} minutes")
-print(f"Max throttle time: {p2['time_m']:.2f} minutes")
-print()
+if p2 is None:
+    print("Error for 2P")
+else:
+    takeoff_weight = drone_weight + (battery_weight*2)
+    required_thrust = (thrust_weight_ratio * takeoff_weight)
+    print('\n#########')
+    print(f"Battery: {batt_format} {batt_s}S2P {battery_capacity*2000} mAh {max_battery_current*2}A {battery_weight*2}g")
+    print("#########")
+    print(f"2P Takeoff weight: {takeoff_weight}g")
+    print(f"Required thrust for {thrust_weight_ratio:.1f}:1 thrust/weight ratio at {takeoff_weight}g TOW: {required_thrust:.2f}g")
+    print(f"Actual Thrust/Weight ratio: {max_total_thrust/takeoff_weight:.2f}:1")
+    if max_total_thrust < required_thrust:
+        print(f"\nERROR: Insufficient thrust for thrust/weight ratio")
+        exit(0)
+    print(f"Amp draw hover: {p2['ah']:.2f} A")
+    print(f"Amp draw flight: {p2['af']:.2f} A")
+    print(f"Hover time: {p2['time_h']:.2f} minutes")
+    print(f"Flight time: {p2['time_f']:.2f} minutes")
+    print(f"Max throttle time: {p2['time_m']:.2f} minutes")
+    print()
 
 def from_weight_ratio():
     mot_frame_w_ratio = 0.275

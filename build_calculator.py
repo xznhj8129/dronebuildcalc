@@ -221,7 +221,7 @@ class MotorData:
         battery_capacity_Am = battery_capacity * 60
 
         # Iterate over possible outbound flight times (in minutes)
-        for t_out in np.arange(1, flight_time, 0.1):
+        for t_out in np.arange(0.1, flight_time, 0.1):
             # Energy consumed during outbound flight, loiter, and return flight
             E_out = current_draws['Flight'] * t_out
             E_loiter = current_draws['Hover'] * loiter_time_min
@@ -270,7 +270,8 @@ class MotorData:
 
 #brand, motor, prop = ('Brotherhobby', 'F2004', 'F6030X2')
 #brand, motor, prop = ('Brotherhobby', 'F2008', 'F9453X2')
-brand, motor, prop = ('Brotherhobby', 'F1503', 'F4726X2')
+brand, motor, prop = ('Uangel', 'A2807', 'GF7035')
+#brand, motor, prop = ('Brotherhobby', 'F1503', 'F4726X2')
 
 motor_model = MotorData(brand, motor, prop)
 
@@ -297,7 +298,7 @@ flight_speed = flight_speed_kmh * (1000/3600)  # Convert km/h to m/s
 
 # Safety margin and loiter time
 safety_margin = 0.1  # 10% safety margin
-loiter_time_min = 10  # Loaded hover time in minutes
+loiter_time_min = 1  # Loaded hover time in minutes
 
 print()
 print('#'*32)

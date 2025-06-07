@@ -65,12 +65,16 @@ for (brand, motor, prop), group in motor_data.groupby(['Brand', 'Motor', 'Prop']
     }
     
     # Generate polynomial fit functions for every combination of variables
-    for (x_var, y_var) in itertools.permutations(data_dict.keys(), 2):
-        x_data = data_dict[x_var]
-        y_data = data_dict[y_var]
-        coeffs = np.polyfit(x_data, y_data, 2)
-        poly_func = np.poly1d(coeffs)
-        poly_dict[f'{x_var}_to_{y_var}'] = poly_func
+    try:
+        for (x_var, y_var) in itertools.permutations(data_dict.keys(), 2):
+            x_data = data_dict[x_var]
+            y_data = data_dict[y_var]
+            coeffs = np.polyfit(x_data, y_data, 2)
+            poly_func = np.poly1d(coeffs)
+            poly_dict[f'{x_var}_to_{y_var}'] = poly_func
+    except np.linalg.LinAlgError:
+        print("Error in data: solver did not converge, skipping engine")
+        continue
     
     # Create a MotorData object for this engine
     motor_data_obj = MotorData(brand, motor, prop)
@@ -177,21 +181,15 @@ battery_capacity = cell_cap * batt_p  # Total battery capacity in Amp-hours
 max_battery_current = cell_c * cell_cap * batt_p  # Maximum battery current in Amps
 max_battery_voltage = 4.2 * batt_s
 avg_battery_voltage = 3.8 * batt_s
-print(f"Battery {batt_s}S{batt_p}P {battery_capacity*1000} mAh {max_battery_current} A {battery_weight} g")
 
 # Step 2: Define the input variables
 #print("Using the following input variables:")
 frame_weight = float(500)    # Frame weight in grams
-payload_weight = float(2500)  # Payload weight in grams
+payload_weight = float(1500)  # Payload weight in grams
 max_esc_current = float(60)  # Maximum ESC current in Amps
 thrust_weight_ratio = float(2)  # Necessary thrust-to-weight ratio
-print("Frame weight:",frame_weight)
-print("Payload weight:",payload_weight)
-print("Maximum ESC current:",max_esc_current)
-print("Minimum Thrust/Weight ratio:",thrust_weight_ratio)
 
-
-max_engine_size = 31  # Maximum allowed engine stator diameter in mm
+max_engine_size = 50  # Maximum allowed engine stator diameter in mm
 number_of_motors = 4 # Assume number of motors (default to quadcopter)
 
 # Speed in km/h (convert to m/s for calculations)
@@ -212,7 +210,11 @@ for (brand, motor, prop), group in motor_data.groupby(['Brand', 'Motor', 'Prop']
     kv = group['KV'].iloc[0]
     prop_diameter = group['Data P size'].iloc[0]
     prop_pitch = group['Data P pitch'].iloc[0]
-    motor_sim_data = motor_data_objects[(brand, motor, prop)]
+    try:
+        motor_sim_data = motor_data_objects[(brand, motor, prop)]
+    except KeyError:
+        print(f"Error: Motor {brand} {motor} {prop} not available")
+        continue
     
     
     # Skip motors larger than the maximum allowed size
@@ -363,12 +365,20 @@ for (brand, motor, prop), group in motor_data.groupby(['Brand', 'Motor', 'Prop']
         }
 
         valid_combinations.append(best_option)
+print('\n#####################')
+print('Calculations for parameters:')
+print(f"Battery {batt_s}S{batt_p}P {battery_capacity*1000} mAh {max_battery_current} A {battery_weight} g")
+print("Frame weight:",frame_weight)
+print("Payload weight:",payload_weight)
+print("Maximum ESC current:",max_esc_current)
+print("Minimum Thrust/Weight ratio:",thrust_weight_ratio)
 
 # Narrow down to top 5 options based on delivery radius
 if valid_combinations:
     df_valid = pd.DataFrame(valid_combinations)
     df_top10 = df_valid.nlargest(10, 'Radius km', keep='first')
     print("\nTop 10 Motor-Propeller Combinations Based on Delivery Radius:")
+    print('LH = Loaded/Hover, LF = Loaded/Flight @ 30-degree pitch, UH = Unloaded Hover, UF = Unloaded Flight')
     print(df_top10)
 else:
     print("No suitable motor-propeller combinations found that fulfill the requirements.")
