@@ -1,0 +1,32 @@
+{
+    "battery": {
+        "lipo-4S-2200": {
+            "type": "lipo",
+            "mass": 0.203,
+            "s": 4,
+            "p": 1,
+            "mah": 2200,
+            "c": 50
+        },
+        "lipo-6S-2200": {
+            "type": "lipo",
+            "mass": 0.302,
+            "s": 6,
+            "p": 1,
+            "mah": 2200,
+            "c": 70
+        },
+        "liion-6S1P-1": {
+            "type": "liion",
+            "cell": ["Molicel","P45B","21700"],
+            "s": 6,
+            "p": 1
+        },
+        "liion-4S2P-1": {
+            "type": "liion",
+            "cell": ["Molicel","P45B","21700"],
+            "s": 4,
+            "p": 2
+        }
+    }
+}

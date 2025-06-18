@@ -3,19 +3,22 @@ import math
 import numpy as np
 import itertools
 from matplotlib import pyplot as plt 
+from simlib import *
 
 class MotorData:
     def __init__(self, brand, motor, prop, kv, serie):
         self.brand = brand
         self.motor = motor
         self.prop = prop
+        self.kv = int(kv)
+        self.serie = int(serie)
 
         motor_data = pd.read_csv('motordata.csv')
-        group = motor_data[(motor_data['Brand'] == brand) & 
-                           (motor_data['Motor'] == motor) & 
-                           (motor_data['Prop'] == prop) & 
-                           (motor_data['KV'] == kv) & 
-                           (motor_data['Data Batt S'] == serie)]
+        group = motor_data[(motor_data['Brand'] == self.brand) & 
+                           (motor_data['Motor'] == self.motor) & 
+                           (motor_data['Prop'] == self.prop) & 
+                           (motor_data['KV'] == self.kv) & 
+                           (motor_data['Data Batt S'] == self.serie)]
 
         if group.empty:
             print(f"No data found for {brand} {motor} {prop} {kv} {serie}S")
@@ -76,7 +79,6 @@ class MotorData:
 
 
     def motor_perf_thrust(self, val): # thrust g
-        global avg_battery_voltage
         global number_of_motors
         if val > self.max_thrust:
             print('Error: over maximum thrust')
@@ -85,11 +87,10 @@ class MotorData:
         power_per_motor = self.thrust_to_watts(val)
         current_per_motor = self.thrust_to_current(val)
         eff = self.thrust_to_efficiency(val)
-        total_current = current_per_motor * number_of_motors
         throttle = self.thrust_to_throttle(val)
         #print(f'CALC FOR {val:.2f}g THRUST: {rpm:.2f} RPM {current_per_motor:.2f} A ({total_current:.2f} A total) {throttle:.2f}% THROT')
 
-        return power_per_motor, current_per_motor, eff, total_current, throttle
+        return power_per_motor, current_per_motor, eff, throttle
         #print(f"\t\thover {round(hover_power_per_motor)} W, {round(hover_eff,3)} eff, {round(hover_current_per_motor)}, A/4 {round(total_current_hover)}, A {round(throttle_hover)}% throt")
 
     def drone_weight_perf(self, weight, batt_weight, tot_motors_weight, batt_cap):
@@ -206,118 +207,73 @@ class MotorData:
             'radius': radius,
         }
 
-
-#brand, motor, prop = ('Brotherhobby', 'F2004', 'F6030X2')
-brand, motor, prop, kv, battS = ('Uangel', 'A2807', 'GF7035', 1300, 6)
-#brand, motor, prop, kv, battS = ('Brotherhobby', 'F2008', 'F8330X2', 1400, 4)
-#brand, motor, prop, kv, battS = ('Brotherhobby', 'F2008', 'F9453X2', 1000, 4)
-#brand, motor, prop, kv, battS = ('Brotherhobby', 'F2008', 'F9453X2', 1000, 3)
-#brand, motor, prop, kv, battS = ('Brotherhobby', 'F1503', 'F4726X2', 3850, 2)
-#brand, motor, prop, kv, battS = ('Brotherhobby', 'F2206', 'F6030X2', 1370, 4)
-#brand, motor, prop, kv, battS = ('Brotherhobby', 'F2216', 'F9453X2', 880, 4)
-
-
-motor_model = MotorData(brand, motor, prop, kv, battS)
+if __name__ == '__main__':
+    #brand, motor, prop = ('Brotherhobby', 'F2004', 'F6030X2')
+    brand, motor, prop, kv, battS = ('Uangel', 'A2807', 'GF7035', 1300, 6)
+    #brand, motor, prop, kv, battS = ('Brotherhobby', 'F2008', 'F8330X2', 1400, 4)
+    #brand, motor, prop, kv, battS = ('Brotherhobby', 'F2008', 'F9453X2', 1000, 4)
+    #brand, motor, prop, kv, battS = ('Brotherhobby', 'F2008', 'F9453X2', 1000, 3)
+    #brand, motor, prop, kv, battS = ('Brotherhobby', 'F1503', 'F4726X2', 3850, 2)
+    #brand, motor, prop, kv, battS = ('Brotherhobby', 'F2206', 'F6030X2', 1370, 4)
+    #brand, motor, prop, kv, battS = ('Brotherhobby', 'F2216', 'F9453X2', 880, 4)
 
 
-batt_format = 21700
-batt_s = motor_model.motor_batt_s   # Number of series cells
-batt_p = 1   # Number of parallel cells
-cell_w = float(70)  # Weight per cell in grams (21700: 70, 18650: 45)
-cell_c = 10         # C-rating of the cells
-cell_cap = float(5) # Capacity per cell in Amp-hours
+    motor_model = MotorData(brand, motor, prop, kv, battS)
 
-cell_n = batt_s * batt_p
-battery_capacity = cell_cap * batt_p  # Total battery capacity in Amp-hours
-max_battery_current = cell_c * cell_cap * batt_p  # Maximum battery current in Amps
-max_battery_voltage = 4.2 * batt_s
-avg_battery_voltage = 3.8 * batt_s
-battery_weight = cell_w * cell_n
 
-max_esc_current = float(60)  # Maximum ESC current in Amps
-thrust_weight_ratio = float(2.5)  # Necessary thrust-to-weight ratio
-number_of_motors = 4 # Assume number of motors (default to quadcopter)
-total_motors_weight = motor_model.motor_weight * number_of_motors
+    batt_format = 21700
+    batt_s = motor_model.motor_batt_s   # Number of series cells
+    batt_p = 1   # Number of parallel cells
+    cell_w = float(70)  # Weight per cell in grams (21700: 70, 18650: 45)
+    cell_c = 10         # C-rating of the cells
+    cell_cap = float(5) # Capacity per cell in Amp-hours
 
-# Speed in km/h (convert to m/s for calculations)
-flight_speed_kmh = 50  # Flight speed in km/h
-flight_speed = flight_speed_kmh * (1000/3600)  # Convert km/h to m/s
+    cell_n = batt_s * batt_p
+    battery_capacity = cell_cap * batt_p  # Total battery capacity in Amp-hours
+    max_battery_current = cell_c * cell_cap * batt_p  # Maximum battery current in Amps
+    max_battery_voltage = 4.2 * batt_s
+    avg_battery_voltage = 3.8 * batt_s
+    battery_weight = cell_w * cell_n
 
-# Safety margin and loiter time
-safety_margin = 0.1  # 10% safety margin
-loiter_time_min = 1  # Loaded hover time in minutes
-takeoff_weight = 1400.0 # 1P
-drone_weight = takeoff_weight - battery_weight
-frame_weight = drone_weight - total_motors_weight
-required_thrust = (thrust_weight_ratio * takeoff_weight)
-max_total_thrust = motor_model.max_thrust * number_of_motors
+    max_esc_current = float(60)  # Maximum ESC current in Amps
+    thrust_weight_ratio = float(2.5)  # Necessary thrust-to-weight ratio
+    number_of_motors = 4 # Assume number of motors (default to quadcopter)
+    total_motors_weight = motor_model.motor_weight * number_of_motors
 
-print()
-print('#'*32)
-print(f'Results for {takeoff_weight}g takeoff weight')
-print('#'*32)
-print(f"Motor: {brand} {motor} {prop} {motor_model.kv}KV Max thrust: {motor_model.max_thrust}g")
-print(f"Total motors weight: {total_motors_weight}g")
-print(f"Drone weight (no battery): {drone_weight}g")
-print(f"Frame weight (no battery or motors): {frame_weight:.2f}g")
-print(f"Maximum total thrust: {max_total_thrust}g")
-print(f"Maximum total Amp draw (x1): {motor_model.max_draw*4} ({motor_model.max_draw}) A")
+    # Speed in km/h (convert to m/s for calculations)
+    flight_speed_kmh = 50  # Flight speed in km/h
+    flight_speed = flight_speed_kmh * (1000/3600)  # Convert km/h to m/s
 
-print('\n#########')
-print(f"Battery: {batt_format} {batt_s}S1P {battery_capacity*1000} mAh {max_battery_current}A {battery_weight}g")
-print("#########")
-p = motor_model.drone_weight_perf(frame_weight, total_motors_weight, battery_weight, battery_capacity)
-
-print(f"Required thrust for {thrust_weight_ratio:.1f}:1 thrust/weight ratio at {takeoff_weight}g TOW: {required_thrust:.2f}g")
-print(f"Actual Thrust/Weight ratio: {max_total_thrust/takeoff_weight:.2f}:1")
-if max_total_thrust < required_thrust:
-    print(f"\nERROR: Insufficient thrust for thrust/weight ratio")
-    exit(0)
-print(f"Amp draw hover: {p['ah']:.2f} A")
-print(f"Amp draw flight: {p['af']:.2f} A")
-print(f"Hover time: {p['time_h']:.2f} minutes")
-print(f"Flight time: {p['time_f']:.2f} minutes")
-print(f"Max throttle time: {p['time_m']:.2f} minutes")
-print()
-
-p2 = motor_model.drone_weight_perf(frame_weight, total_motors_weight, battery_weight*2, battery_capacity*2)
-if p2 is None:
-    print("Error for 2P")
-else:
-    takeoff_weight = drone_weight + (battery_weight*2)
+    # Safety margin and loiter time
+    safety_margin = 0.1  # 10% safety margin
+    loiter_time_min = 1  # Loaded hover time in minutes
+    takeoff_weight = 1400.0 # 1P
+    drone_weight = takeoff_weight - battery_weight
+    frame_weight = drone_weight - total_motors_weight
     required_thrust = (thrust_weight_ratio * takeoff_weight)
+    max_total_thrust = motor_model.max_thrust * number_of_motors
+
+    print()
+    print('#'*32)
+    print(f'Results for {takeoff_weight}g takeoff weight')
+    print('#'*32)
+    print(f"Motor: {brand} {motor} {prop} {motor_model.kv}KV Max thrust: {motor_model.max_thrust}g")
+    print(f"Total motors weight: {total_motors_weight}g")
+    print(f"Drone weight (no battery): {drone_weight}g")
+    print(f"Frame weight (no battery or motors): {frame_weight:.2f}g")
+    print(f"Maximum total thrust: {max_total_thrust}g")
+    print(f"Maximum total Amp draw (x1): {motor_model.max_draw*4} ({motor_model.max_draw}) A")
+
     print('\n#########')
-    print(f"Battery: {batt_format} {batt_s}S2P {battery_capacity*2000} mAh {max_battery_current*2}A {battery_weight*2}g")
+    print(f"Battery: {batt_format} {batt_s}S1P {battery_capacity*1000} mAh {max_battery_current}A {battery_weight}g")
     print("#########")
-    print(f"2P Takeoff weight: {takeoff_weight}g")
+    p = motor_model.drone_weight_perf(frame_weight, total_motors_weight, battery_weight, battery_capacity)
+
     print(f"Required thrust for {thrust_weight_ratio:.1f}:1 thrust/weight ratio at {takeoff_weight}g TOW: {required_thrust:.2f}g")
     print(f"Actual Thrust/Weight ratio: {max_total_thrust/takeoff_weight:.2f}:1")
     if max_total_thrust < required_thrust:
         print(f"\nERROR: Insufficient thrust for thrust/weight ratio")
         exit(0)
-    print(f"Amp draw hover: {p2['ah']:.2f} A")
-    print(f"Amp draw flight: {p2['af']:.2f} A")
-    print(f"Hover time: {p2['time_h']:.2f} minutes")
-    print(f"Flight time: {p2['time_f']:.2f} minutes")
-    print(f"Max throttle time: {p2['time_m']:.2f} minutes")
-    print()
-
-def from_weight_ratio():
-    mot_frame_w_ratio = 0.275
-    bat_total_w_ratio = 0.32
-
-    est_frame_w = total_motors_weight/mot_frame_w_ratio
-    est_mtow_from_frame = est_frame_w + total_motors_weight + battery_weight
-    #est_mtow_from_batt = battery_weight/bat_total_w_ratio
-
-    #avg_est_mtow = (est_mtow_from_frame + est_mtow_from_batt) / 2.0
-    #avg_est_frame_w = avg_est_mtow - battery_weight - total_motors_weight
-    p = motor_model.drone_weight_perf(est_frame_w)
-
-    print(f"Estimated frame weight for {mot_frame_w_ratio*100:.2f} % Motor/Frame ratio: {est_frame_w:.2f}g, Total: {est_mtow_from_frame:.2f}g")
-    #print(f"Estimated MTOW for {bat_total_w_ratio*100} % Battery/MTOW ratio: {est_mtow_from_batt:.2f}g")
-    #print(f"Median estimated MTOW: {avg_est_mtow:.2f}g")    
-    #print(f"Estimated median frame weight: {avg_est_frame_w:.2f}g ")
     print(f"Amp draw hover: {p['ah']:.2f} A")
     print(f"Amp draw flight: {p['af']:.2f} A")
     print(f"Hover time: {p['time_h']:.2f} minutes")
@@ -325,60 +281,79 @@ def from_weight_ratio():
     print(f"Max throttle time: {p['time_m']:.2f} minutes")
     print()
 
-    results = []
-    frame_weight = float(100)    # (minimum) frame weight in grams
-    for frame_w in np.arange(50, 5000, 1):
-        p = motor_model.drone_weight_perf(frame_w)
-        if p: 
-            results.append(p)
-        else: break
-    maxw = results[len(results)-1]
-    print()
-    print(f"Maximum weight")
-    print(f"Highest Frame weight: {maxw['frame_weight']:.2f}g")
-    print(f"Highest MTOW: {maxw['total_weight']:.2f}g")
-    #print(f"Thrust to Weight ratio: {}:{}")
-    print(f"Amp draw hover: {maxw['ah']:.2f} A")
-    print(f"Amp draw flight: {maxw['af']:.2f} A")
-    print(f"Hover time: {maxw['time_h']:.2f} minutes")
-    print(f"Flight time: {maxw['time_f']:.2f} minutes")
-    print(f"Max throttle time: {maxw['time_m']:.2f} minutes")
-    print(f"Battery/MTOW weight ratio: {battery_weight/maxw['total_weight']*100:.2f} %")
-    print(f"Motor/frame weight ratio: {total_motors_weight/maxw['frame_weight']*100:.2f} %")
-    print()
-
-    df = pd.DataFrame(results)
-    filtered_df = df[df['total_weight'] < 250]
-    if not filtered_df.empty:
-        frame_weight_row = filtered_df.loc[filtered_df['frame_weight'].idxmax()]
-        
-        print(f"Maximum 249g")
-        print(f"Highest Frame weight: {frame_weight_row['frame_weight']}g")
-        print(f"Highest MTOW: {frame_weight_row['total_weight']:.2f}g")
-        print(f"Amp draw hover: {frame_weight_row['ah']:.2f} A")
-        print(f"Amp draw flight: {frame_weight_row['af']:.2f} A")
-        print(f"Hover time: {frame_weight_row['time_h']:.2f} minutes")
-        print(f"Flight time: {frame_weight_row['time_f']:.2f} minutes")
-        print(f"Max throttle time: {frame_weight_row['time_m']:.2f} minutes")
-        mfr = total_motors_weight/frame_weight_row['frame_weight']
-        bmwr = battery_weight/frame_weight_row['total_weight']
-        print(f"Motor/frame weight ratio: {mfr*100:.2f} %")
-        print(f"Battery/MTOW weight ratio: {bmwr*100:.2f} %")
-        print()
+    p2 = motor_model.drone_weight_perf(frame_weight, total_motors_weight, battery_weight*2, battery_capacity*2)
+    if p2 is None:
+        print("Error for 2P")
     else:
-        print('Cannot meet <249g\n')
+        takeoff_weight = drone_weight + (battery_weight*2)
+        required_thrust = (thrust_weight_ratio * takeoff_weight)
+        print('\n#########')
+        print(f"Battery: {batt_format} {batt_s}S2P {battery_capacity*2000} mAh {max_battery_current*2}A {battery_weight*2}g")
+        print("#########")
+        print(f"2P Takeoff weight: {takeoff_weight}g")
+        print(f"Required thrust for {thrust_weight_ratio:.1f}:1 thrust/weight ratio at {takeoff_weight}g TOW: {required_thrust:.2f}g")
+        print(f"Actual Thrust/Weight ratio: {max_total_thrust/takeoff_weight:.2f}:1")
+        if max_total_thrust < required_thrust:
+            print(f"\nERROR: Insufficient thrust for thrust/weight ratio")
+            exit(0)
+        print(f"Amp draw hover: {p2['ah']:.2f} A")
+        print(f"Amp draw flight: {p2['af']:.2f} A")
+        print(f"Hover time: {p2['time_h']:.2f} minutes")
+        print(f"Flight time: {p2['time_f']:.2f} minutes")
+        print(f"Max throttle time: {p2['time_m']:.2f} minutes")
+        print()
 
-    thresholds = [60, 50, 45, 40, 35, 30, 25, 20]
-    for threshold in thresholds:
-        filtered_df = df[df['time_f'] > threshold]
+    def from_weight_ratio():
+        mot_frame_w_ratio = 0.275
+        bat_total_w_ratio = 0.32
 
+        est_frame_w = total_motors_weight/mot_frame_w_ratio
+        est_mtow_from_frame = est_frame_w + total_motors_weight + battery_weight
+        #est_mtow_from_batt = battery_weight/bat_total_w_ratio
+
+        #avg_est_mtow = (est_mtow_from_frame + est_mtow_from_batt) / 2.0
+        #avg_est_frame_w = avg_est_No data t_perf(est_frame_w)
+
+        print(f"Estimated frame weight for {mot_frame_w_ratio*100:.2f} % Motor/Frame ratio: {est_frame_w:.2f}g, Total: {est_mtow_from_frame:.2f}g")
+        #print(f"Estimated MTOW for {bat_total_w_ratio*100} % Battery/MTOW ratio: {est_mtow_from_batt:.2f}g")
+        #print(f"Median estimated MTOW: {avg_est_mtow:.2f}g")    
+        #print(f"Estimated median frame weight: {avg_est_frame_w:.2f}g ")
+        print(f"Amp draw hover: {p['ah']:.2f} A")
+        print(f"Amp draw flight: {p['af']:.2f} A")
+        print(f"Hover time: {p['time_h']:.2f} minutes")
+        print(f"Flight time: {p['time_f']:.2f} minutes")
+        print(f"Max throttle time: {p['time_m']:.2f} minutes")
+        print()
+
+        results = []
+        frame_weight = float(100)    # (minimum) frame weight in grams
+        for frame_w in np.arange(50, 5000, 1):
+            p = motor_model.drone_weight_perf(frame_w)
+            if p: 
+                results.append(p)
+            else: break
+        maxw = results[len(results)-1]
+        print()
+        print(f"Maximum weight")
+        print(f"Highest Frame weight: {maxw['frame_weight']:.2f}g")
+        print(f"Highest MTOW: {maxw['total_weight']:.2f}g")
+        #print(f"Thrust to Weight ratio: {}:{}")
+        print(f"Amp draw hover: {maxw['ah']:.2f} A")
+        print(f"Amp draw flight: {maxw['af']:.2f} A")
+        print(f"Hover time: {maxw['time_h']:.2f} minutes")
+        print(f"Flight time: {maxw['time_f']:.2f} minutes")
+        print(f"Max throttle time: {maxw['time_m']:.2f} minutes")
+        print(f"Battery/MTOW weight ratio: {battery_weight/maxw['total_weight']*100:.2f} %")
+        print(f"Motor/frame weight ratio: {total_motors_weight/maxw['frame_weight']*100:.2f} %")
+        print()
+
+        df = pd.DataFrame(results)
+        filtered_df = df[df['total_weight'] < 250]
         if not filtered_df.empty:
             frame_weight_row = filtered_df.loc[filtered_df['frame_weight'].idxmax()]
-            if frame_weight_row['frame_weight'] >= maxw['frame_weight']:
-                break
-
-            print(f"Threshold: {threshold} minutes")
-            print(f"Highest Frame weight: {frame_weight_row['frame_weight']:.2f}g")
+            
+            print(f"Maximum 249g")
+            print(f"Highest Frame weight: {frame_weight_row['frame_weight']}g")
             print(f"Highest MTOW: {frame_weight_row['total_weight']:.2f}g")
             print(f"Amp draw hover: {frame_weight_row['ah']:.2f} A")
             print(f"Amp draw flight: {frame_weight_row['af']:.2f} A")
@@ -390,17 +365,42 @@ def from_weight_ratio():
             print(f"Motor/frame weight ratio: {mfr*100:.2f} %")
             print(f"Battery/MTOW weight ratio: {bmwr*100:.2f} %")
             print()
+        else:
+            print('Cannot meet <249g\n')
+
+        thresholds = [60, 50, 45, 40, 35, 30, 25, 20]
+        for threshold in thresholds:
+            filtered_df = df[df['time_f'] > threshold]
+
+            if not filtered_df.empty:
+                frame_weight_row = filtered_df.loc[filtered_df['frame_weight'].idxmax()]
+                if frame_weight_row['frame_weight'] >= maxw['frame_weight']:
+                    break
+
+                print(f"Threshold: {threshold} minutes")
+                print(f"Highest Frame weight: {frame_weight_row['frame_weight']:.2f}g")
+                print(f"Highest MTOW: {frame_weight_row['total_weight']:.2f}g")
+                print(f"Amp draw hover: {frame_weight_row['ah']:.2f} A")
+                print(f"Amp draw flight: {frame_weight_row['af']:.2f} A")
+                print(f"Hover time: {frame_weight_row['time_h']:.2f} minutes")
+                print(f"Flight time: {frame_weight_row['time_f']:.2f} minutes")
+                print(f"Max throttle time: {frame_weight_row['time_m']:.2f} minutes")
+                mfr = total_motors_weight/frame_weight_row['frame_weight']
+                bmwr = battery_weight/frame_weight_row['total_weight']
+                print(f"Motor/frame weight ratio: {mfr*100:.2f} %")
+                print(f"Battery/MTOW weight ratio: {bmwr*100:.2f} %")
+                print()
 
 
 
-    weights = [result['total_weight'] for result in results]
-    flight_times = [result['time_f'] for result in results] 
-    plt.figure(figsize=(8, 6))
-    plt.plot(weights, flight_times, label='MTOW vs Flight time')
-    plt.title('MTOW vs Flight Time')
-    plt.xlabel('MTOW (g)')
-    plt.ylabel('Flight Time (min)')
-    plt.grid(True)
-    plt.legend()
-    plt.savefig(f'{brand} {motor} {prop} MTOW vs Flight time.png')
-    plt.show()
+        weights = [result['total_weight'] for result in results]
+        flight_times = [result['time_f'] for result in results] 
+        plt.figure(figsize=(8, 6))
+        plt.plot(weights, flight_times, label='MTOW vs Flight time')
+        plt.title('MTOW vs Flight Time')
+        plt.xlabel('MTOW (g)')
+        plt.ylabel('Flight Time (min)')
+        plt.grid(True)
+        plt.legend()
+        plt.savefig(f'{brand} {motor} {prop} MTOW vs Flight time.png')
+        plt.show()

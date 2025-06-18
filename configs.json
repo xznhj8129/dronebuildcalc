@@ -1,0 +1,181 @@
+{
+    "assembly_quadrocket": {
+        "canards": true,
+        "parts": [
+            {
+                "module":"cam-nose"
+            },{
+                "module": "servo-canards-1",
+                "surfaces": "canard-1",
+                "control": ["p","y","r"]
+            },{ 
+                "module":"batt-1",
+                "battery":"lipo-6S-2200"
+            },{
+                "module":"avionics-vert"
+            },{
+                "module":"crossfin-holder",
+                "surfaces": "saggerwing-7in-back",
+                "motors": "Uangel_A2807_1300",
+                "props": "GF7042X2"
+            },{
+                "module":"quad-esc-1"
+            },{
+                "module":"endcap"
+            }
+        ]
+    },
+
+    "assembly_lancet": {
+        "canards": false,
+        "parts": [
+        {
+            "module":"cam-nose"
+        },{
+            "module":"payload-1",
+            "payload_mass": 0.250,
+            "parts": []
+        },{
+            "module":"batt-1",
+            "battery":"lipo-4S-2200"
+        },{
+            "module": "4wing-holder",
+            "surfaces": "350mm-wing",
+            "control": ["r"]
+        },{ 
+            "module":"avionics-1"
+        },{
+            "module":"4wing-holder",
+            "surfaces": "short-wing",
+            "control": ["y","p"]
+        },{
+            "module":"motor_cap",
+            "motors": "Uangel_A2807_1300",
+            "props": "GF7042X2",
+            "parts": []
+        }
+    ]},
+    "assembly_quadlancet": {
+        "canards": false,
+        "parts": [
+        {
+            "module":"cam-nose"
+        },{
+            "module":"payload-1",
+            "payload_mass": 0.350,
+            "parts": []
+        },{
+            "module":"batt-1",
+            "battery":"lipo-6S-2200"
+        },{
+            "module": "4wing-holder",
+            "surfaces": "test-wing",
+            "control": ["r"]
+        },{ 
+            "module":"avionics-1"
+        },{
+            "module":"crossfin-holder",
+            "surfaces": "saggerwing-7in-back",
+            "motors": "Uangel_A2807_1300",
+            "props": "GF7042X2"
+        },{
+            "module":"endcap"
+        }
+    ]},
+    "assembly_snake": {
+        "canards": true,
+        "parts": [
+        {
+            "module":"cam-nose",
+            "parts": []
+        },{ 
+            "module":"avionics-1",
+            "parts": []
+        },{
+            "module": "servo-canards-1",
+            "surfaces": "canard-1",
+            "control": ["p","y","r"],
+            "parts": []
+        },{
+            "module":"payload-1",
+            "payload_mass": 0.250,
+            "parts": []
+        },{
+            "module":"batt-1",
+            "battery":"lipo-6S-2200",
+            "parts": []
+        },{
+            "module":"crossfin-holder",
+            "surfaces": "fixedfin",
+            "parts": []
+        },{
+            "module":"motor_cap",
+            "motors": "Uangel_A2807_1300",
+            "props": "GF7042X2",
+            "parts": []
+        }
+    ]},
+    "assembly_agm": {
+        "canards": false,
+        "parts": [
+        {
+            "module":"cam-nose",
+            "parts": []
+        },{ 
+            "module":"batt-1",
+            "battery":"lipo-4S-2200",
+            "parts": []
+        },{
+            "module":"crossfin-holder",
+            "surfaces": "fixedfin",
+            "parts": []
+        },{
+            "module":"avionics-1",
+            "parts": []
+        },{
+            "module": "servo-canards-1",
+            "surfaces": "canard-1",
+            "control": ["p","y","r"],
+            "parts": []
+        },{
+            "module":"motor_cap",
+            "motors": "Uangel_A2807_1300",
+            "props": "GF7042X2",
+            "parts": []
+        }
+    ]},
+    "assembly_plane": {
+        "canards": false,
+        "parts": [
+        {
+            "module":"cam-nose",
+            "parts": []
+        },{ 
+            "module":"batt-1",
+            "battery":"liion-4S2P-1",
+            "parts": []
+        },{
+            "module":"payload-1",
+            "payload_mass": 0.250,
+            "parts": []
+        },{
+            "module":"2wing-holder",
+            "surfaces": "350mm-wing",
+            "parts": []
+        },{
+            "module":"avionics-1",
+            "parts": []
+        },{
+            "module": "2wing-holder-tail",
+            "surfaces": "short-wing",
+            "control": ["p","y","r"],
+            "parts": []
+        },{
+            "module":"motor_cap",
+            "motors": "Axisflying_AX2812_900",
+            "props": "HQ9045",
+            "parts": []
+        }
+    ]
+}
+}

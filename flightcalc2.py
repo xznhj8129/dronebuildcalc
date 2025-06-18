@@ -2,6 +2,7 @@ import pandas as pd
 import math
 import numpy as np
 import itertools
+import json
 
 # Load motor data from CSV file
 motor_data = pd.read_csv('motordata.csv')
@@ -17,6 +18,7 @@ class MotorData:
         self.motor = motor
         self.prop = prop
         self.polynomials = {}
+        self.mape = {}
 
     def add_polynomial(self, name, func):
         self.polynomials[name] = func
@@ -29,6 +31,7 @@ class MotorData:
 
 # Dictionary to store the best MotorData objects for each engine
 motor_data_objects = {}
+md = {}
 
 # List of target variables (those that we want to predict)
 target_variables = ['rpm', 'current', 'watts', 'efficiency', 'throttle']
@@ -53,6 +56,7 @@ for (brand, motor, prop), group in motor_data.groupby(['Brand', 'Motor', 'Prop']
 
     # Dictionary to hold polynomials for every combination
     poly_dict = {}
+    mx = {}
 
     # List of variables for combinations
     data_dict = {
@@ -78,6 +82,7 @@ for (brand, motor, prop), group in motor_data.groupby(['Brand', 'Motor', 'Prop']
     
     # Create a MotorData object for this engine
     motor_data_obj = MotorData(brand, motor, prop)
+    mape_over = False
 
     # Iterate over each target variable (rpm, current, watts, efficiency, etc.)
     for target in target_variables:
@@ -124,6 +129,9 @@ for (brand, motor, prop), group in motor_data.groupby(['Brand', 'Motor', 'Prop']
 
             # Print the selected best function for the current target
             print(f"\tSelected best function for {target}: {best_result['chain']} with MAPE: {best_result['mape']:.2f}%")
+            if best_result['mape'] > 10:
+                mape_over = True
+
 
             # Create the callable function chain based on the best result
             def create_callable_function(poly_dict, chain):
@@ -138,18 +146,23 @@ for (brand, motor, prop), group in motor_data.groupby(['Brand', 'Motor', 'Prop']
                 return func
 
             # Add the best function to the MotorData object
+
             func_name = f'thrust_to_{target}'
             motor_data_obj.add_polynomial(func_name, create_callable_function(poly_dict, best_result['polynomial_chain']))
+            mx[func_name] = list(poly_dict[func_name].coefficients)
 
     # Store the MotorData object in the dictionary
-    motor_data_objects[(brand, motor, prop)] = motor_data_obj
+    if mape_over:
+        print("Error: best MAPE over 10%, skipping")
+    else:
+        motor_data_objects[(brand,motor,prop)] = motor_data_obj
+        code = f"{brand}//{motor}//{prop})"
+        if code not in md:
+            md[code] = mx
 
-# Function to compute total weight
-def compute_total_weight(motor_weight, include_payload):
-    total_weight = frame_weight + battery_weight + (number_of_motors * motor_weight)
-    if include_payload:
-        total_weight += payload_weight
-    return total_weight
+
+with open("motordata_polynomials.json","w+") as file:
+    file.write(json.dumps(md,indent=4))
 
 def compute_performance(val): # thrust g
     global avg_battery_voltage
@@ -162,6 +175,8 @@ def compute_performance(val): # thrust g
     eff = motor_sim_data.thrust_to_efficiency(val)
     total_current = current_per_motor * number_of_motors
     throttle = motor_sim_data.thrust_to_throttle(val)
+
+    #print(motor_sim_data.mape["thrust_to_rpm"])
 
     return power_per_motor, current_per_motor, eff, total_current, throttle
     #print(f"\t\thover {round(hover_power_per_motor)} W, {round(hover_eff,3)} eff, {round(hover_current_per_motor)}, A/4 {round(total_current_hover)}, A {round(throttle_hover)}% throt")
@@ -201,6 +216,15 @@ safety_margin = 0.1  # 10% safety margin
 loiter_time_min = 1  # Loaded hover time in minutes
 
 valid_combinations = []
+
+"""
+for (brand, motor, prop), group in motor_data.groupby(['Brand', 'Motor', 'Prop']):
+    try:
+        motor_sim_data = motor_data_objects[(brand, motor, prop)]
+    except KeyError:
+        print(f"Error: Motor {brand} {motor} {prop} not available")
+        continue
+"""
 
 # Brand	Motor	Weight g	KV	Prop	T	V	A	Thrust g	Efficiency	W	RPM	Min Prop	Max Prop	Stator Diameter	Stator height	Data P size	Data P pitch	Prop area	Stator Vol	Stator Volume/Prop Area ratio
 for (brand, motor, prop), group in motor_data.groupby(['Brand', 'Motor', 'Prop']):
@@ -249,7 +273,10 @@ for (brand, motor, prop), group in motor_data.groupby(['Brand', 'Motor', 'Prop']
 
     for include_payload in [True, False]:
         condition = 'Loaded' if include_payload else 'Unloaded'
-        total_weight = compute_total_weight(motor_weight, include_payload)
+
+        total_weight = frame_weight + battery_weight + (number_of_motors * motor_weight)
+        if include_payload:
+            total_weight += payload_weight
 
         # **Compute necessary thrust for thrust-to-weight ratio**
         necessary_tw_thrust = total_weight * thrust_weight_ratio  # Total necessary thrust
@@ -353,13 +380,13 @@ for (brand, motor, prop), group in motor_data.groupby(['Brand', 'Motor', 'Prop']
             'Throt (L-H)': f"{throttle_settings['Loaded']['Hover']:.1f}%",
             'Throt (L-F)': f"{throttle_settings['Loaded']['Flight']:.1f}%",
             'Throt (U-F)': f"{throttle_settings['Unloaded']['Flight']:.1f}%",
-            'Cur A (L-H)': current_draws['Loaded']['Hover'],
-            'Cur A (L-F)': current_draws['Loaded']['Flight'],
-            'Cur A (U-F)': current_draws['Unloaded']['Flight'],
-            'Flight min (L-F)': flight_time_loaded,
-            'Flight min (U-F)': flight_time_unloaded,
-            'Max Outbound min': max_flight_time,
-            'Loiter min': loiter_time_min,
+            'Cur A (L-H)': f"{current_draws['Loaded']['Hover']:.2f}",
+            'Cur A (L-F)': f"{current_draws['Loaded']['Flight']:.2f}",
+            'Cur A (U-F)': f"{current_draws['Unloaded']['Flight']:.2f}",
+            'Flight min (L-F)': f"{flight_time_loaded:.2f}",
+            'Flight min (U-F)': f"{flight_time_unloaded:.2f}",
+            'Max Outbound min': f"{max_flight_time:.2f}",
+            'Loiter min': f"{loiter_time_min:.2f}",
             'Radius km': radius,
             'Max range km': max_distance
         }
