@@ -252,6 +252,22 @@
         "motor_x_pos": 0,
         "ctl_surface": false
     },
+    "saggerwing-10in-back": {
+        "type": "wing",
+        "model": "xm62",
+        "span": 0.175,
+        "mass": 0.059,
+        "cg": 0.5,
+        "chord_root": 0.125,
+        "chord_tip": 0.097,
+        "aoa_ang": 0.0,
+        "sweep_ang": 10.0,
+        "airfoil": "naca0008",
+        "motor": true,
+        "motor_n": 1,
+        "motor_x_pos": 0,
+        "ctl_surface": false
+    },
     "joint-ring-c": {
         "type": "coupler",
         "model": "xm62",

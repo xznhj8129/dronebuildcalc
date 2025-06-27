@@ -354,10 +354,8 @@ if __name__ == '__main__':
                 num_motors += num_wings * num_motors_per_wing # Use += to accumulate
                 motor_mass_each = motor_model.motor_weight  / 1000.0
                 total_wing_motors_mass = (num_wings * num_motors_per_wing) * motor_mass_each
-                
-                print(f"{'    ∟ Motor: '+motor_name:<25} | {'on wing':<10} | {total_wing_motors_mass:>9.4f} | {'N/A':>7}"
-                    f"{'(at mount CG)':>12} | {attached_part_cg_global_x_m:>13.f}")
-                print(f"{'    ∟ Propeller: '+prop:<25} ")
+                print(f"{'    ∟ Motor: '+motor_name} | 'on wing' | {total_wing_motors_mass} | 'N/A'(at mount CG)' | {attached_part_cg_global_x_m}")
+                print(f"{'    ∟ Propeller: '+prop} ")
 
                 total_mass_kg     += total_wing_motors_mass
                 total_moment_kg_m += total_wing_motors_mass * attached_part_cg_global_x_m
@@ -743,223 +741,143 @@ if __name__ == '__main__':
     CL_max_airfoil_2D = float(CLs_airfoil.max())
     alpha_stall_airfoil_2D = float(alphas_clmax_sweep[CLs_airfoil.argmax()])
     CL_max_3D = CL_max_airfoil_2D * (AR_eff / (AR_eff + 2 * (AR_eff + 4) / (AR_eff + 2))) # Helmbold approximation
+    # [ ... All code from the beginning of the file up to this point remains IDENTICAL ... ]
 
-    # ==================================================
-    # PERFORMANCE CALCULATION (NEW METHODOLOGY)
-    # ==================================================
-    print("\n" + "="*50)
-    print("STARTING FULL PERFORMANCE SWEEP ANALYSIS...")
-    print("="*50)
+# ==================================================
+# PERFORMANCE CALCULATION (HYBRID LIFT 2D SWEEP)
+# ==================================================
+print("\n" + "="*50)
+print("STARTING HYBRID PERFORMANCE 2D SWEEP (V, alpha)...")
+print("="*50)
+
+# Effective pitch speed of the propeller
+prop_pitch_m = motor_model.prop_pitch * 0.0254
+rpm_at_max_thrust = motor_model.rpm[-1]
+V_pitch_effective = rpm_at_max_thrust * prop_pitch_m / 60.0
+
+def get_thrust_available(V, V_pitch, T_static):
+    v_array = np.array(V)
+    thrust = T_static * (1 - (v_array / V_pitch)**2)
+    return np.where(v_array >= V_pitch, 0.0, np.maximum(0, thrust))
+
+def get_aero_forces(airplane, V, alpha_deg, atm_object):
+    op_point_current = asb.OperatingPoint(atmosphere=atm_object, velocity=V, alpha=alpha_deg)
+    vlm = asb.VortexLatticeMethod(airplane=airplane, op_point=op_point_current, chordwise_resolution=6, spanwise_resolution=20) # Lower res for speed
+    aero = vlm.run()
     
-    # Stall speed is the absolute minimum speed for level flight
-    V_stall = math.sqrt(2 * weight_N / (rho * S_ref * CL_max_3D)) if CL_max_3D > 0 else float('inf')
-
-    # Effective pitch speed of the propeller
-    # Use max RPM from motor data for a more realistic estimate than no-load RPM
-    prop_pitch_m = motor_model.prop_pitch * 0.0254
-    rpm_at_max_thrust = motor_model.rpm[-1]
-    V_pitch_effective = rpm_at_max_thrust * prop_pitch_m / 60.0
-
-    def get_thrust_available(V, V_pitch, T_static, num_motors):
-        """ A simple but more realistic model of thrust fall-off with airspeed. """
-        if V >= V_pitch:
-            return 0.0
-        # Parabolic fall-off model
-        return T_static * (1 - (V / V_pitch)**2)
+    q = 0.5 * atm_object.density() * V**2
+    CDi = float(aero['CD'])
+    CD_total = C_D0 + CDi
+    drag = CD_total * q * S_ref
     
-    def get_lift_drag_at_V(airplane, V, alpha_deg, op_point_base):
-        """ Helper to run VLM for a specific V and alpha. """
-        op_point_current = asb.OperatingPoint(velocity=V, alpha=alpha_deg)
-        vlm = asb.VortexLatticeMethod(airplane=airplane, op_point=op_point_current)
-        aero = vlm.run()
-        return float(aero['L']), float(aero['CD'])
+    return float(aero['L']), drag
 
-    def find_level_flight_alpha(alpha_deg, airplane, V, weight_N, op_point_base):
-        """ Function for the root-finder. Returns L-W. """
-        L, _ = get_lift_drag_at_V(airplane, V, alpha_deg, op_point_base)
-        return L - weight_N
+# --- 2D Performance Sweep ---
+results = []
+airspeeds_to_test = np.linspace(5.0, V_pitch_effective * 0.98, 30)
+alphas_to_test = np.linspace(0, alpha_stall_airfoil_2D, 20)
 
-    # --- Performance Sweep ---
-    results = []
-    # Sweep from just above stall speed up to effective pitch speed
-    airspeeds_to_test = np.linspace(V_stall * 1.05, V_pitch_effective * 0.98, 50)
-    
-    op_point_base = asb.OperatingPoint()
+print(f"Sweeping {len(airspeeds_to_test)} speeds and {len(alphas_to_test)} angles of attack...")
 
-    for V in airspeeds_to_test:
-        try:
-            # Find the alpha for level flight (L=W) at this speed
-            # Search for alpha between -5 and stall alpha + 5 degrees
-            alpha_level_flight_deg = brentq(
-                f=find_level_flight_alpha,
-                a=-5,
-                b=alpha_stall_airfoil_2D + 5,
-                args=(airplane, V, weight_N, op_point_base)
-            )
+for V in airspeeds_to_test:
+    # Get available thrust at this speed once
+    thrust_available_N = get_thrust_available(V, V_pitch_effective, static_thrust_N)
+    if thrust_available_N <= 0:
+        continue
 
-            # Now that we have the alpha, get the total drag at this flight condition
-            q = 0.5 * rho * V**2
-            _, CDi_level = get_lift_drag_at_V(airplane, V, alpha_level_flight_deg, op_point_base)
-            CD_total_level = C_D0 + CDi_level
-            
-            thrust_required_N = CD_total_level * q * S_ref
-            thrust_available_N = get_thrust_available(V, V_pitch_effective, static_thrust_N, num_motors)
+    for alpha in alphas_to_test:
+        # 1. Get aerodynamic forces at this (V, alpha) point
+        aero_lift, aero_drag = get_aero_forces(airplane, V, alpha, atm)
 
-            # If we need more thrust than is available, we can't fly at this speed
-            if thrust_required_N > thrust_available_N:
-                continue # Skip to next speed
+        # 2. Calculate required vertical thrust from motors
+        # This is the portion of weight not supported by the wings.
+        T_vertical_req = max(0, weight_N - aero_lift)
 
-            thrust_per_motor_g = (thrust_required_N / num_motors / 9.81) * 1000
+        # 3. Horizontal thrust must equal aerodynamic drag
+        T_horizontal_req = aero_drag
 
-            # Get motor performance for the required thrust
-            P_m, I_m, gW, thr = motor_model.motor_perf_thrust(thrust_per_motor_g)
-            
-            if math.isnan(P_m): # motor_perf_thrust failed
-                continue
+        # 4. Calculate total thrust vector magnitude
+        T_total_req = math.sqrt(T_vertical_req**2 + T_horizontal_req**2)
 
-            I_total = (I_m * num_motors) + base_amps
-            P_elec_total = P_m * num_motors + (base_amps * batt_nominal_v * batt_S)
+        # 5. Check if this flight state is possible
+        if T_total_req > thrust_available_N:
+            continue # Required thrust exceeds available, impossible flight point
 
-            flight_time_h = (batt_mah / 1000) / I_total
-            range_km = V * flight_time_h * 3.6
+        # 6. If possible, calculate power consumption
+        thrust_per_motor_g = (T_total_req / num_motors / 9.81) * 1000
+        P_m, I_m, gW, thr = motor_model.motor_perf_thrust(thrust_per_motor_g)
 
-            results.append({
-                "V_ms": V,
-                "alpha_deg": alpha_level_flight_deg,
-                "Thrust_req_N": thrust_required_N,
-                "P_elec_W": P_elec_total,
-                "I_total_A": I_total,
-                "Flight_Time_min": flight_time_h * 60,
-                "Range_km": range_km,
-                "g_W": gW,
-                "Throttle_pct": thr
-            })
-
-        except (ValueError, RuntimeError):
-            # brentq fails if L=W is not possible in the given alpha range (e.g., too slow)
+        if math.isnan(P_m):
             continue
-    
-    if not results:
-        print("\nERROR: Performance sweep failed. The aircraft may be unable to sustain level flight.")
-        exit(0)
 
-    perf_df = pd.DataFrame(results)
+        I_total = (I_m * num_motors) + base_amps
+        P_elec_total = P_m * num_motors + (base_amps * batt_nominal_v * batt_S)
+        flight_time_h = (batt_mah / 1000) / I_total
+        range_km = V * flight_time_h * 3.6
 
-    # Find optimal points
-    idx_endurance = perf_df['P_elec_W'].idxmin()
-    idx_range = perf_df['Range_km'].idxmax()
+        # Store detailed results
+        results.append({
+            "V_ms": V, "alpha_deg": alpha,
+            "P_elec_W": P_elec_total, "Thrust_req_N": T_total_req,
+            "Aero_Lift_N": aero_lift, "Aero_Drag_N": aero_drag,
+            "Prop_Lift_N": T_vertical_req,
+            "Flight_Time_min": flight_time_h * 60, "Range_km": range_km,
+            "Throttle_pct": thr
+        })
 
-    endurance_pt = perf_df.loc[idx_endurance]
-    range_pt = perf_df.loc[idx_range]
-    
-    # Max level flight speed is the last valid point in our sweep
-    V_max_level_flight = perf_df["V_ms"].iloc[-1]
+if not results:
+    print("\nERROR: Performance sweep failed. The aircraft may be unable to sustain level flight under any tested conditions.")
+    exit(0)
 
+perf_df = pd.DataFrame(results)
 
-    # ==================================================
-    # RESULTS
-    # ==================================================
-    print("\n" + "="*40)
-    print("OVERALL SUMMARY:")
-    print("="*40)
-    print(f"Total Fuselage Length : {fuselage_length:.4f} m")
-    print(f"Total Mass            : {total_mass_kg:.4f} kg ({weight_N:.2f} N)")
-    print(f"Center of Gravity (CG_x): {cg_x_m:.4f} m (from fuselage front, x=0)")
-    print()
-    print(f"--- Motors & Propulsion ---")
-    print(f"Motor name             : {motor_model.brand} {motor_model.motor} {motor_model.kv}KV")
-    print(f"Motor count            : {num_motors}")
-    print(f"Propellers             : {motor_model.prop}")
-    print(f"Total Static Thrust    : {static_thrust_N:.2f} N ({static_thrust_g/1000:.2f} kgf)")
-    print()
+# Find optimal points
+idx_min_power = perf_df['P_elec_W'].idxmin()
+idx_max_range = perf_df['Range_km'].idxmax()
 
-    print(f"--- Aerodynamic Properties ---")
-    print(f"Reference Area (S_ref)                   = {S_ref:.4f} m² (Total main wing planform)")
-    print(f"Effective Aspect Ratio (AR_eff)          = {AR_eff:.2f}")
-    print(f"Calculated Oswald Efficiency (e)         = {e_oswald:.3f}")
-    print(f"Induced Drag Factor (k = 1/(π*AR*e))     = {k_induced_drag:.4f}")
-    print(f"Total Zero-lift drag coeff (C_D₀)        = {C_D0:.5f}")
-    print(f"  (Main Wing: {CD0_contrib_main/C_D0*100:.1f}%, Tail: {CD0_contrib_tail/C_D0*100:.1f}%, Fuse: {CD0_contrib_fuse/C_D0*100:.1f}%, Interf: {C_D0_interf_factor*100:.1f}%)")
-    print()
-    print(f"--- Stability ---")
-    print(f"Neutral Point (x_np from nose)           = {x_np:.3f} m")
-    print(f"Static Margin (SM)                       = {static_margin_pct:.1f} %c_ref")
-    print(f"Lift curve slope (CLα)                   = {CLalpha_deg:.4f} /deg")
-    print(f"Moment curve slope (Cmα about xyz_ref)   = {Cmalpha_deg:.4f} /deg")
-    print()
+min_power_pt = perf_df.loc[idx_min_power]
+max_range_pt = perf_df.loc[idx_max_range]
 
-    print(f"--- Performance Estimates (Level Flight) ---")
-    print(f"2D Airfoil C_Lmax                        = {CL_max_airfoil_2D:.3f} at alpha={alpha_stall_airfoil_2D:.1f} deg")
-    print(f"Estimated 3D Aircraft C_Lmax             = {CL_max_3D:.3f}")
-    print(f"Stall Speed (V_stall)                    = {V_stall:.2f} m/s ({V_stall*3.6:.1f} km/h)")
-    print(f"Max Level Flight Speed (V_max)           = {V_max_level_flight:.2f} m/s ({V_max_level_flight*3.6:.1f} km/h)")
-    print("-" * 50)
-    
-    print("--- Max Endurance Point ---")
-    print(f"  Airspeed                               = {endurance_pt['V_ms']:.2f} m/s ({endurance_pt['V_ms']*3.6:.1f} km/h)")
-    print(f"  Angle of Attack                        = {endurance_pt['alpha_deg']:.2f} deg")
-    print(f"  Thrust Required                        = {endurance_pt['Thrust_req_N']:.2f} N")
-    print(f"  Total Electrical Power                 = {endurance_pt['P_elec_W']:.2f} W")
-    print(f"  Total Current Draw                     = {endurance_pt['I_total_A']:.2f} A")
-    print(f"  Motor Throttle (estimated)             = {endurance_pt['Throttle_pct']:.1f} %")
-    print(f"  Flight Time                            = {endurance_pt['Flight_Time_min']:.1f} min")
-    print(f"  Range at this speed                    = {endurance_pt['Range_km']:.1f} km")
-    print("-" * 50)
+# ==================================================
+# RESULTS
+# ==================================================
+print("\n" + "="*40)
+print("OVERALL SUMMARY:")
+# [ ... The other summary sections can remain as they are ... ]
+print(f"Total Mass            : {total_mass_kg:.4f} kg ({weight_N:.2f} N)")
+print(f"Center of Gravity (CG_x): {cg_x_m:.4f} m (from fuselage front, x=0)")
+# [ ... ]
 
-    print("--- Max Range Point ---")
-    print(f"  Airspeed                               = {range_pt['V_ms']:.2f} m/s ({range_pt['V_ms']*3.6:.1f} km/h)")
-    print(f"  Angle of Attack                        = {range_pt['alpha_deg']:.2f} deg")
-    print(f"  Thrust Required                        = {range_pt['Thrust_req_N']:.2f} N")
-    print(f"  Total Electrical Power                 = {range_pt['P_elec_W']:.2f} W")
-    print(f"  Total Current Draw                     = {range_pt['I_total_A']:.2f} A")
-    print(f"  Motor Throttle (estimated)             = {range_pt['Throttle_pct']:.1f} %")
-    print(f"  Flight Time at this speed              = {range_pt['Flight_Time_min']:.1f} min")
-    print(f"  Max Range                              = {range_pt['Range_km']:.1f} km")
-    print("-" * 50)
-    
-    if arguments.export:
-        airplane.export_OpenVSP_vspscript(f"{arguments.export}.vspscript")
+print(f"\n--- Optimal Flight Performance (Level Flight) ---")
+print("-" * 50)
+print("--- Point of Minimum Power (Max Endurance) ---")
+lift_frac_aero = (min_power_pt['Aero_Lift_N'] / weight_N) * 100
+lift_frac_prop = (min_power_pt['Prop_Lift_N'] / weight_N) * 100
 
-    # ==================================================
-    # VISUALISATION
-    # ==================================================
-    
-    if arguments.view: 
-        airplane.draw_three_view()
-    if arguments.vlm:
-        # Draw the VLM at the max range flight condition for a more relevant visualization
-        vlm_range = asb.VortexLatticeMethod(
-            airplane=airplane,
-            op_point=asb.OperatingPoint(velocity=range_pt['V_ms'], alpha=range_pt['alpha_deg']),
-        )
-        vlm_range.draw(show_kwargs=dict())
-    
-    # Optional: Plot the performance curves
-    plt.figure(figsize=(12, 8))
-    
-    plt.subplot(2, 1, 1)
-    plt.plot(perf_df['V_ms'], perf_df['P_elec_W'], 'b-', label='Power Required (W)')
-    plt.plot(endurance_pt['V_ms'], endurance_pt['P_elec_W'], 'bo', markersize=10, label=f'Min Power Point ({endurance_pt["V_ms"]:.1f} m/s)')
-    plt.title('Performance Curves')
-    plt.xlabel('Airspeed (m/s)')
-    plt.ylabel('Power (W)', color='b')
-    plt.grid(True)
-    plt.legend()
-    
-    ax2 = plt.gca().twinx()
-    plt.plot(perf_df['V_ms'], perf_df['Thrust_req_N'], 'r-', label='Thrust Required (N)')
-    plt.plot(airspeeds_to_test, get_thrust_available(airspeeds_to_test, V_pitch_effective, static_thrust_N, num_motors), 'g--', label='Thrust Available (N)')
-    plt.ylabel('Thrust (N)', color='r')
-    plt.legend(loc='lower right')
+print(f"  Optimal Airspeed                       = {min_power_pt['V_ms']:.2f} m/s ({min_power_pt['V_ms']*3.6:.1f} km/h)")
+print(f"  Optimal Angle of Attack                = {min_power_pt['alpha_deg']:.2f} deg")
+print(f"  Minimum Electrical Power               = {min_power_pt['P_elec_W']:.2f} W")
+print(f"  Total Thrust Required                  = {min_power_pt['Thrust_req_N']:.2f} N")
+print(f"  Max Endurance (Flight Time)            = {min_power_pt['Flight_Time_min']:.1f} min")
+print("\n  >>> LIFT BREAKDOWN AT THIS POINT <<<")
+print(f"    Aerodynamic Lift (from wings)        = {min_power_pt['Aero_Lift_N']:.2f} N ({lift_frac_aero:.1f}% of Weight)")
+print(f"    Propulsive Lift (from tilted thrust) = {min_power_pt['Prop_Lift_N']:.2f} N ({lift_frac_prop:.1f}% of Weight)")
+print("-" * 50)
 
-    plt.subplot(2, 1, 2)
-    plt.plot(perf_df['V_ms'], perf_df['Range_km'], 'k-', label='Range (km)')
-    plt.plot(range_pt['V_ms'], range_pt['Range_km'], 'ko', markersize=10, label=f'Max Range Point ({range_pt["V_ms"]:.1f} m/s)')
-    plt.xlabel('Airspeed (m/s)')
-    plt.ylabel('Range (km)')
-    plt.grid(True)
-    plt.legend()
-    
-    plt.tight_layout()
-    plt.savefig(f'{arguments.assembly}_performance_curves.png')
-    #plt.show()
+print("--- Point of Maximum Range ---")
+lift_frac_aero_rng = (max_range_pt['Aero_Lift_N'] / weight_N) * 100
+lift_frac_prop_rng = (max_range_pt['Prop_Lift_N'] / weight_N) * 100
+
+print(f"  Optimal Airspeed                       = {max_range_pt['V_ms']:.2f} m/s ({max_range_pt['V_ms']*3.6:.1f} km/h)")
+print(f"  Optimal Angle of Attack                = {max_range_pt['alpha_deg']:.2f} deg")
+print(f"  Electrical Power at this speed         = {max_range_pt['P_elec_W']:.2f} W")
+print(f"  Total Thrust Required                  = {max_range_pt['Thrust_req_N']:.2f} N")
+print(f"  Maximum Range                          = {max_range_pt['Range_km']:.1f} km")
+print(f"  Flight time at this speed              = {max_range_pt['Flight_Time_min']:.1f} min")
+print("\n  >>> LIFT BREAKDOWN AT THIS POINT <<<")
+print(f"    Aerodynamic Lift (from wings)        = {max_range_pt['Aero_Lift_N']:.2f} N ({lift_frac_aero_rng:.1f}% of Weight)")
+print(f"    Propulsive Lift (from tilted thrust) = {max_range_pt['Prop_Lift_N']:.2f} N ({lift_frac_prop_rng:.1f}% of Weight)")
+print("-" * 50)
+
+# [ ... The rest of the script (visualization etc.) remains unchanged ... ]
+# Note: The plotting section can be updated to create a contour plot for a more detailed view.

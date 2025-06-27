@@ -26,6 +26,33 @@
         ]
     },
 
+    "assembly_quadrocket10": {
+        "canards": true,
+        "parts": [
+            {
+                "module":"cam-nose"
+            },{
+                "module": "servo-canards-1",
+                "surfaces": "canard-1",
+                "control": ["p","y","r"]
+            },{ 
+                "module":"batt-1",
+                "battery":"lipo-6S-2200"
+            },{
+                "module":"avionics-vert"
+            },{
+                "module":"crossfin-holder",
+                "surfaces": "saggerwing-10in-back",
+                "motors": "Axisflying_AX2812_900",
+                "props": "HQ9045"
+            },{
+                "module":"quad-esc-1"
+            },{
+                "module":"endcap"
+            }
+        ]
+    },
+
     "assembly_lancet": {
         "canards": false,
         "parts": [

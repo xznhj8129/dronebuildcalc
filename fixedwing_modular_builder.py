@@ -722,7 +722,7 @@ if __name__ == '__main__':
             thrust_available = 0.0
         else:
             frac = 1.0 - V / V_pitch
-            thrust_available = static_thrust_N * num_motors * frac * frac   # [N]
+            thrust_available = static_thrust_N * frac * frac   # [N]
 
         # drag required (?) at speed V
         q  = 0.5 * rho * V**2
