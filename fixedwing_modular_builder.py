@@ -11,32 +11,59 @@ from simlib import *
 # Silence NumPy scalar-conversion deprecation spam
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
+
+
+
+
+
+
+
+
+
+
+
 def create_elliptical_fuselage(
     length: float,
     diameter: float,
     cap_len: float,
     n_cap: int = 12,
-    n_cyl: int = 8,
+    n_cyl: int = 1,
 ) -> asb.Fuselage:
-    r = diameter / 2
-    x_cyl0, x_cyl1 = cap_len, length - cap_len
-    xsecs = []
+    R      = diameter / 2
+    xsecs  = []
 
-    # nose cap
-    for xi in np.linspace(0, cap_len, n_cap):
-        radius = r * math.sqrt(max(0.0, 1 - ((xi - cap_len) / cap_len) ** 2))
-        xsecs.append(asb.FuselageXSec(xyz_c=[xi, 0, 0], radius=radius))
+    def push(tag: str, x: float, r: float):
+        if xsecs and abs(x - xsecs[-1].xyz_c[0]) < 1e-9:
+            return                                      # no duplicates, no steps
+        print(f"{tag:6s}  x:{x:8.3f}  r:{r:6.3f}")
+        xsecs.append(asb.FuselageXSec(xyz_c=[x, 0, 0], radius=r))
 
-    # straight cylinder
-    for xi in np.linspace(x_cyl0, x_cyl1, n_cyl):
-        xsecs.append(asb.FuselageXSec(xyz_c=[xi, 0, 0], radius=r))
+    # ── nose cap (tip → tube-join, *exclude* join itself) ─────────────────────
+    for t in np.linspace(0.0, 1.0, n_cap, endpoint=False):
+        x = t * cap_len
+        r = R * math.sqrt(1 - (1 - t) ** 2)             # quarter-ellipse
+        push("NOSE", x, r)
 
-    # tail cap
-    for xi in np.linspace(0, cap_len, n_cap):
-        radius = r * math.sqrt(max(0.0, 1 - (xi / cap_len) ** 2))
-        xsecs.append(asb.FuselageXSec(xyz_c=[x_cyl1 + xi, 0, 0], radius=radius))
+    # ── straight tube interior (no ends) ──────────────────────────────────────
+    span = length - (2 * cap_len)
+    print(span)
+    for i in range(1, 2):
+        x = cap_len + span * i / (2)
+        push("TUBE", x, R)
+
+    # ── tail cap (tube-join → tail-tip, *include* tip) ────────────────────────
+    base = length - cap_len
+    push("TUBE", base, R)                               # single join point
+    for t in np.linspace(0.0, 1.0, n_cap + 1)[1:]:
+        x = base + t * cap_len
+        r = R * math.sqrt(1 - t ** 2)                   # mirrored quarter-ellipse
+        push("TAIL", x, r)
 
     return asb.Fuselage(name="Fuselage", xsecs=xsecs)
+
+
+
+
 
 def create_surface(
     idx: int,
@@ -114,7 +141,7 @@ if __name__ == '__main__':
     parser.add_argument('--aoa', type=float, default=0.0, help="Angle of attack")
     parser.add_argument('--view', action='store_true', help="Show 3-view")
     parser.add_argument('--vlm', action='store_true', help="Show vortex lattice simulation")
-    parser.add_argument('--export', default=None, help="VSP file export filename")
+    parser.add_argument('--export_vsp', action='store_true', help="VSP file export")
     arguments = parser.parse_args()
 
     # Couple Assembly
@@ -146,6 +173,8 @@ if __name__ == '__main__':
     total_moment_kg_m    = 0.0  # Sum of (mass_i * cg_x_i)
     current_x_fuselage_m = 0.0  # Tracks the x-coordinate of the FRONT of the current module
     tube_diam = 0.0
+    body_x_start = 0.0
+    body_x_end = 0.0
 
     print("="*120)
     print(f"Airframe: {arguments.assembly}")
@@ -214,7 +243,7 @@ if __name__ == '__main__':
                 total_moment_kg_m += total_wing_motors_mass * attached_part_cg_global_x_m
 
 
-        if module_data["type"] == "body" and module_data.get("payload", False):
+        elif module_data["type"] == "body" and module_data.get("payload", False):
             payload_mass = assembly[i]["payload_mass"]
 
             print(f"{'  ∟ Payload: ':<25} | {'in body':<10} | {payload_mass:>9.4f} | {'N/A':>7} | "
@@ -223,7 +252,7 @@ if __name__ == '__main__':
             total_mass_kg     += payload_mass
             total_moment_kg_m += payload_mass * attached_part_cg_global_x_m
 
-        if module_data["type"] == "body" and module_data.get("battery", False):
+        elif module_data["type"] == "body" and module_data.get("battery", False):
             battery_name = item_in_assembly["battery"]
             battery_part_data = parts["battery"][battery_name]
             batt_S = battery_part_data['s']
@@ -251,7 +280,7 @@ if __name__ == '__main__':
             total_mass_kg     += battery_mass
             total_moment_kg_m += battery_mass * attached_part_cg_global_x_m
 
-        if module_data["type"] == "tail" and module_data.get("motor", False):
+        elif module_data["type"] == "tail" and module_data.get("motor", False):
             motor_name = item_in_assembly["motors"]
             prop = item_in_assembly["props"]
             brand, model, kv = motor_name.split("_")
@@ -291,8 +320,7 @@ if __name__ == '__main__':
 
     weight_N  = total_mass_kg * 9.81
     print()
-
-    # ==================================================
+# ==================================================
     # WING & TAIL MODULES SUMMARY
     # ==================================================
     #Winged section 1 servo-canards-1: 4 x canard-1
@@ -328,55 +356,65 @@ if __name__ == '__main__':
         length = modules[mod]["len"]
         module_x_map.append(x + length / 2)
         x += length
-
     # ==================================================
     # BUILD FUSELAGE FROM MODULES
     # ==================================================
-    x_offset = 0.0
-    xsecs = []
-    n_cap = 12
+    n_cap = 12            # pts per hemispherical cap
+    EPS   = 1e-6          # duplicate-merge tolerance
 
+    # ---- PASS 1 : locate ends of the straight tube -----------------------------
+    body_x_start = body_x_end = 0.0
+    x_cursor = 0.0
     for mn in assembly:
         m = modules[mn["module"]]
-        length = m["len"]
-        r      = m["diam"] / 2
+        if m["type"] == "nose":
+            body_x_start = x_cursor + m["len"]          # tube starts after nose
+        elif m["type"] == "tail":
+            body_x_end   = x_cursor                     # tube ends where tail starts
+        x_cursor += m["len"]
+
+    body_length = body_x_end - body_x_start
+    print(f"body_x_start: {body_x_start:.3f} m")
+    print(f"body_x_end:   {body_x_end:.3f} m")
+    print(f"body_length:  {body_length:.3f} m")
+
+    # ---- PASS 2 : generate X-sections ------------------------------------------
+    xsecs    = []
+    x_cursor = 0.0
+
+    def add_xsec(x, r):
+        """Append an X-section only if it is at a new x-station."""
+        if xsecs and abs(x - xsecs[-1].xyz_c[0]) < EPS:
+            return
+        xsecs.append(asb.FuselageXSec(xyz_c=[x, 0, 0], radius=r))
+
+    for mn in assembly:
+        m  = modules[mn["module"]]
+        L  = m["len"]
+        R  = m["diam"] / 2
 
         if m["type"] == "nose":
-            # Elliptical nose cap
-            for xi in np.linspace(0, length, n_cap):
-                radius = r * math.sqrt(max(0.0, 1 - ((xi - length) / length) ** 2))
-                xsecs.append(
-                    asb.FuselageXSec(
-                        xyz_c=[x_offset + xi, 0, 0],
-                        radius=radius
-                    )
-                )
-            x_offset += length
+            add_xsec(x_cursor, 0.0)                                   # tip
+            for xi in np.linspace(0, L, n_cap + 2)[1:-1]:             # skip duplicates
+                r = R * math.sqrt(1 - ((xi - L) / L) ** 2)
+                add_xsec(x_cursor + xi, r)
+            add_xsec(x_cursor + L, R)                                 # joint to tube
 
-        elif m["type"] in ["body", "wingmount"]:
-            # Straight cylinder segment
-            xsecs.append(asb.FuselageXSec(xyz_c=[x_offset,        0, 0], radius=r))
-            xsecs.append(asb.FuselageXSec(xyz_c=[x_offset+length, 0, 0], radius=r))
-            x_offset += length
+        elif m["type"] in ("body", "wingmount"):
+            add_xsec(x_cursor, R)
+            add_xsec(x_cursor + L, R)
 
         elif m["type"] == "tail":
-            # Cylinder base
-            xsecs.append(asb.FuselageXSec(xyz_c=[x_offset, 0, 0], radius=r))
-            # Elliptical tail cap
-            for xi in np.linspace(0, length, n_cap):
-                radius = r * math.sqrt(max(0.0, 1 - (xi / length) ** 2))
-                xsecs.append(
-                    asb.FuselageXSec(
-                        xyz_c=[x_offset + xi, 0, 0],
-                        radius=radius
-                    )
-                )
-            x_offset += length
+            add_xsec(x_cursor, R)                                     # tube → cap
+            for xi in np.linspace(0, L, n_cap + 2)[1:-1]:
+                r = R * math.sqrt(1 - (xi / L) ** 2)
+                add_xsec(x_cursor + xi, r)
+            add_xsec(x_cursor + L, 0.0)                               # tail tip
 
-    fuselage = asb.Fuselage(
-        name="Fuselage",
-        xsecs=xsecs
-    )
+        x_cursor += L
+
+    fuselage = asb.Fuselage(name="Fuselage", xsecs=xsecs)
+
     # ==================================================
     # BUILD WINGS & TAIL-FINS FROM MOUNTS
     # ==================================================
@@ -474,6 +512,9 @@ if __name__ == '__main__':
         fuselages=[fuselage],
     )
 
+    if arguments.export_vsp:
+        airplane.export_OpenVSP_vspscript(f"{arguments.assembly}.vspscript")
+        #airplane.export_AVL(f'{arguments.export}.avl')
     # ==================================================
     # VORTEX-LATTICE ANALYSIS
     # ==================================================
@@ -980,8 +1021,6 @@ if __name__ == '__main__':
     print(f"Wing loading (W/S_main)                  = {wing_loading:.2f} N/m²")
     print(f"Wing-to-tail area ratio (S_main/S_tail)  = {wing_to_tail_ratio:.2f}")
     print()
-    if arguments.export:
-        airplane.export_OpenVSP_vspscript(f"{arguments.export}.vspscript")
 
     # ==================================================
     # VISUALISATION
@@ -991,4 +1030,3 @@ if __name__ == '__main__':
         airplane.draw_three_view()
     if arguments.vlm:
         vlm.draw(show_kwargs=dict())
-    

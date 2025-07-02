@@ -306,3 +306,5 @@ lib/__pycache__/
 lib/__pycache__/*
 */__pycache__/*
 *.csv#
+assembly_*
+dump.txt
