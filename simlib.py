@@ -3,6 +3,7 @@ import math
 import numpy as np
 import itertools
 from matplotlib import pyplot as plt 
+from scipy.interpolate import interp1d
 
 class MotorData:
     def __init__(self, brand, motor, prop, kv, serie):
@@ -40,28 +41,41 @@ class MotorData:
         self.prop_pitch = group['Data P pitch'].iloc[0]
 
         thrust_values = np.arange(50, self.max_thrust, 10)
-        for i in ['throttle','current','rpm','watts','efficiency']:
-            self.plot_thrust_to(i, thrust_values)
+        for i in range(1,50):
+            mot_watt, mot_curr, mot_gW, mot_throt, mot_rpm = self.motor_perf_thrust(i*100)
+            if mot_watt==math.inf:
+                break
+            print(f"Tg:{i*100:<15}  W: {mot_watt:<15.2f} g/W:{mot_gW:<15.2f} A:{mot_curr:<15.2f} RPM:{mot_rpm:<15.2f}")
 
-    # Interpolation function for each variable
-    def thrust_to_throttle(self, thrust_values):
-        return np.interp(thrust_values, self.thrust, self.throttle)
 
-    def thrust_to_current(self, thrust_values):
-        return np.interp(thrust_values, self.thrust, self.current)
 
-    def thrust_to_rpm(self, thrust_values):
-        return np.interp(thrust_values, self.thrust, self.rpm)
+    def thrust_to_throttle(self, thrust_g):
+        f = interp1d(self.thrust, self.throttle, fill_value='extrapolate')
+        return f(thrust_g)
 
-    def thrust_to_watts(self, thrust_values):
-        return np.interp(thrust_values, self.thrust, self.watts)
+    def thrust_to_current(self, thrust_g):
+        f = interp1d(self.thrust, self.current, fill_value='extrapolate')
+        return f(thrust_g)
 
-    def thrust_to_efficiency(self, thrust_values):
-        return np.interp(thrust_values, self.thrust, self.efficiency)
+    def thrust_to_rpm(self, thrust_g):
+        f = interp1d(self.thrust, self.rpm, fill_value='extrapolate')
+        return f(thrust_g)
+
+    def thrust_to_watts(self, thrust_g):
+        f = interp1d(self.thrust, self.watts, fill_value='extrapolate')
+        return f(thrust_g)
+
+    def rpm_to_efficiency(self, rpm):
+        f = interp1d(self.rpm, self.efficiency, fill_value='extrapolate')
+        return f(rpm)
+
+    def thrust_to_efficiency(self, thrust_g):
+        f = interp1d(self.thrust, self.efficiency, fill_value='extrapolate')
+        return f(thrust_g)
 
     # Example plot function
     def plot_thrust_to(self, target_variable, thrust_values):
-        true_values = np.interp(thrust_values, self.thrust, getattr(self, target_variable))
+        true_values = interp1d(thrust_values, self.thrust, getattr(self, target_variable))
         predicted_values = getattr(self, f'thrust_to_{target_variable}')(thrust_values)
 
         # Plot true vs predicted values
@@ -77,20 +91,30 @@ class MotorData:
         #plt.show()
 
 
-    def motor_perf_thrust(self, val): # thrust g
-        global number_of_motors
-        if val > self.max_thrust:
-            print('Error: over maximum thrust')
-            return None
-        rpm = self.thrust_to_rpm(val)
-        power_per_motor = self.thrust_to_watts(val)
-        current_per_motor = self.thrust_to_current(val)
-        eff = self.thrust_to_efficiency(val)
-        throttle = self.thrust_to_throttle(val)
-        #print(f'CALC FOR {val:.2f}g THRUST: {rpm:.2f} RPM {current_per_motor:.2f} A ({total_current:.2f} A total) {throttle:.2f}% THROT')
+    def motor_perf_thrust(self, thr_g): # interpolation for thrust g
+        if thr_g > self.max_thrust:
+            #print('Error: over maximum thrust')
+            return math.inf, math.inf, math.inf, math.inf, math.inf
+        rpm = max(0.0,self.thrust_to_rpm(thr_g)) #rpm
+        current_per_motor = max(0.0,self.thrust_to_current(thr_g)) #a
+        elec_eff = max(0.0,self.rpm_to_efficiency(rpm)) #g/w
+        power_per_motor = max(0.0,thr_g / elec_eff) #max(0.0,self.thrust_to_watts(thr_g)) #w
+        throttle = max(0.0,self.thrust_to_throttle(thr_g)) # %
 
-        return power_per_motor, current_per_motor, eff, throttle
-        #print(f"\t\thover {round(hover_power_per_motor)} W, {round(hover_eff,3)} eff, {round(hover_current_per_motor)}, A/4 {round(total_current_hover)}, A {round(throttle_hover)}% throt")
+        return power_per_motor, current_per_motor, elec_eff, throttle, rpm
+
+    def motor_perf_thrust2(self, thr_g, v, airspd): # interpolation for thrust g
+        if thr_g > self.max_thrust:
+            #print('Error: over maximum thrust')
+            return math.inf, math.inf, math.inf, math.inf, math.inf
+        rpm = rpm_from_thrust(thr_g, self.prop_diameter, self.prop_pitch, airspd)
+        #current_per_motor = max(0.0,self.thrust_to_current(thr_g)) #a
+        elec_eff = max(0.0,self.rpm_to_efficiency(rpm)) #g/w
+        power_per_motor = max(0.0,thr_g / elec_eff) #max(0.0,self.thrust_to_watts(thr_g)) #w
+        current_per_motor = power_per_motor / v
+        throttle = max(0.0,self.thrust_to_throttle(thr_g)) # %
+
+        return power_per_motor, current_per_motor, elec_eff, throttle, rpm
 
 class LiIonBatteryData:    
     def __init__(self, brand, model, cellformat, serie, parallel):
@@ -123,3 +147,74 @@ class LiIonBatteryData:
         self.cell_width = 0.021 if self.format=="21700" else 0.018 
         self.pack_len = self.cell_len * self.parallel
         self.pack_width = -1
+
+
+def prop_thrust(RPM: float, diameter_in: float, pitch_in: float, v: float, clip_negative: bool = True) -> float:
+    """
+    https://www.tytorobotics.com/blogs/articles/how-to-calculate-propeller-thrust
+    """
+    if pitch_in <= 0:
+        raise ValueError("pitch_in must be > 0")
+
+    thrust_n = 4.392e-8 * (
+        RPM * (math.pow(diameter_in, 3.5)) / math.sqrt(pitch_in)
+        * (4.233e-4 * RPM * pitch_in - v)
+        ) 
+    thrust_g = thrust_n / 9.81 * 1000
+    
+    if clip_negative:
+        thrust_g = max(thrust_g, 0.0)
+    return thrust_g
+
+
+def rpm_from_thrust(thrust_g: float, diameter_in: float, pitch_in: float, v: float) -> float:
+    """
+    Invert prop_thrust() to get RPM from desired thrust (in grams).
+
+    Forward model (thrust in N):
+        T = K * RPM * (C * RPM - v)
+        where:
+            K = 4.392e-8 * d^3.5 / sqrt(pitch)
+            C = 4.233e-4 * pitch
+            d = diameter_in (in)
+            pitch = pitch_in (in)
+            v = forward airspeed (m/s)
+
+    After algebra:
+        RPM = ( v + sqrt( v^2 + 4 * C * T / K ) ) / ( 2 * C )
+
+    Parameters
+    ----------
+    thrust_g : float
+        Desired thrust in grams ( ≥ 0 ).
+    diameter_in : float
+        Prop diameter in inches.
+    pitch_in : float
+        Prop pitch in inches (> 0).
+    v : float
+        Forward airspeed (m/s).
+
+    Returns
+    -------
+    float
+        Required RPM (rev/min).
+    """
+    if pitch_in <= 0:
+        raise ValueError("pitch_in must be > 0")
+    if diameter_in <= 0:
+        raise ValueError("diameter_in must be > 0")
+    if thrust_g < 0:
+        raise ValueError("thrust_g must be >= 0")
+
+    # Convert thrust grams -> Newtons
+    thrust_n = thrust_g / 1000.0 * 9.81
+    if thrust_n == 0:
+        return 0.0
+
+    K = 4.392e-8 * (diameter_in ** 3.5) / math.sqrt(pitch_in)
+    C = 4.233e-4 * pitch_in
+
+    # RPM = (v + sqrt(v^2 + 4*C*T/K)) / (2*C)
+    inside = v * v + 4.0 * C * thrust_n / K
+    RPM = (v + math.sqrt(inside)) / (2.0 * C)
+    return RPM

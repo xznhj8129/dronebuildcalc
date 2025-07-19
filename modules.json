@@ -4,7 +4,7 @@
         "model": "xm62",
         "len": 0.043,
         "diam": 0.062,
-        "mass": 0.015,
+        "mass": 0.029,
         "cg": 0.5
     },
     "dome-nose": {
@@ -12,7 +12,7 @@
         "model": "xm62",
         "len": 0.043,
         "diam": 0.062,
-        "mass": 0.017,
+        "mass": 0.031,
         "cg": 0.5,
         "eo": true
     },
@@ -21,7 +21,7 @@
         "model": "xm62",
         "len": 0.06,
         "diam": 0.062,
-        "mass": 0.029,
+        "mass": 0.047,
         "cg": 0.5,
         "eo": true
     },
@@ -201,6 +201,20 @@
         "chord_tip": 0.09,
         "aoa_ang": 2.0,
         "sweep_ang": 2.0,
+        "airfoil": "naca6409",
+        "motor": false,
+        "ctl_surface": false
+    },
+    "450mm-wing": {
+        "type": "wing",
+        "model": "xm62",
+        "span": 0.55,
+        "mass": 0.05,
+        "cg": 0.5,
+        "chord_root": 0.105,
+        "chord_tip": 0.105,
+        "aoa_ang": 2.0,
+        "sweep_ang": 0.0,
         "airfoil": "naca6409",
         "motor": false,
         "ctl_surface": false

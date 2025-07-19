@@ -1,6 +1,34 @@
 {
+    "assembly_quadrocket_nocanards": {
+        "vtol": true,
+        "tailless": true,
+        "canards": false,
+        "name": "62mm Quadrocket 7in v1",
+        "parts": [
+            {
+                "module":"cam-nose"
+            },{
+                "module":"batt-1",
+                "battery":"lipo-6S-2200"
+            },{
+                "module":"avionics-vert"
+            },{
+                "module":"crossfin-holder",
+                "surfaces": "saggerwing-7in-back",
+                "motors": "Uangel_A2807_1300",
+                "props": "GF7042X2"
+            },{
+                "module":"quad-esc-1"
+            },{
+                "module":"endcap"
+            }
+        ]
+    },
     "assembly_quadrocket": {
+        "vtol": true,
+        "tailless": false,
         "canards": true,
+        "name": "62mm Canards Quadrocket 7in v1",
         "parts": [
             {
                 "module":"cam-nose"
@@ -27,7 +55,10 @@
     },
 
     "assembly_quadrocket10": {
+        "vtol": true,
+        "tailless": false,
         "canards": true,
+        "name": "62mm Canards Quadrocket 10in v1",
         "parts": [
             {
                 "module":"cam-nose"
@@ -54,7 +85,10 @@
     },
 
     "assembly_lancet": {
+        "vtol": false,
+        "tailless": false,
         "canards": false,
+        "name": "Lancet v1",
         "parts": [
         {
             "module":"cam-nose"
@@ -64,7 +98,7 @@
             "parts": []
         },{
             "module":"batt-1",
-            "battery":"lipo-4S-2200"
+            "battery":"lipo-6S-2200"
         },{
             "module": "4wing-holder",
             "surfaces": "350mm-wing",
@@ -77,13 +111,16 @@
             "control": ["y","p"]
         },{
             "module":"motor_cap",
-            "motors": "Uangel_A2807_1300",
-            "props": "GF7042X2",
+            "motors": "Axisflying_AX2812_900",
+            "props": "HQ9045",
             "parts": []
         }
     ]},
     "assembly_quadlancet": {
+        "vtol": true,
+        "tailless": false,
         "canards": false,
+        "name": "62mm Quad Lancet 7in v1",
         "parts": [
         {
             "module":"cam-nose"
@@ -110,13 +147,17 @@
         }
     ]},
     "assembly_snake": {
+        "vtol": false,
+        "tailless": false,
         "canards": true,
+        "name": "62mm Snake",
         "parts": [
         {
-            "module":"cam-nose",
+            "module":"plain-nose",
             "parts": []
         },{ 
-            "module":"avionics-1",
+            "module":"payload-1",
+            "payload_mass": 0.200,
             "parts": []
         },{
             "module": "servo-canards-1",
@@ -124,12 +165,11 @@
             "control": ["p","y","r"],
             "parts": []
         },{
-            "module":"payload-1",
-            "payload_mass": 0.250,
-            "parts": []
-        },{
             "module":"batt-1",
             "battery":"lipo-6S-2200",
+            "parts": []
+        },{
+            "module":"avionics-1",
             "parts": []
         },{
             "module":"crossfin-holder",
@@ -143,7 +183,10 @@
         }
     ]},
     "assembly_agm": {
+        "vtol": false,
+        "tailless": false,
         "canards": false,
+        "name": "62mm AGM v1",
         "parts": [
         {
             "module":"cam-nose",
@@ -172,14 +215,17 @@
         }
     ]},
     "assembly_plane": {
+        "vtol": false,
+        "tailless": false,
         "canards": false,
+        "name": "62mm Simple Plane v1",
         "parts": [
         {
             "module":"cam-nose",
             "parts": []
         },{ 
             "module":"batt-1",
-            "battery":"liion-4S2P-1",
+            "battery":"lipo-4S-2200",
             "parts": []
         },{
             "module":"payload-1",
@@ -187,7 +233,7 @@
             "parts": []
         },{
             "module":"2wing-holder",
-            "surfaces": "350mm-wing",
+            "surfaces": "450mm-wing",
             "parts": []
         },{
             "module":"avionics-1",

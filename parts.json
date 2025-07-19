@@ -27,6 +27,19 @@
             "cell": ["Molicel","P45B","21700"],
             "s": 4,
             "p": 2
+        },
+        "liion-4S3P-1": {
+            "type": "liion",
+            "cell": ["Molicel","P45B","21700"],
+            "s": 4,
+            "p": 3
+        },
+
+        "liion-6S2P-1": {
+            "type": "liion",
+            "cell": ["Molicel","P45B","21700"],
+            "s": 6,
+            "p": 2
         }
     }
 }
